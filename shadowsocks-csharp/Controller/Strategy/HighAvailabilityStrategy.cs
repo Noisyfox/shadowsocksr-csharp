@@ -182,5 +182,17 @@ namespace Shadowsocks.Controller.Strategy
                 status.lastFailure = DateTime.Now;
             }
         }
+
+        public void Activate()
+        {
+        }
+
+        public void Deactivate()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }

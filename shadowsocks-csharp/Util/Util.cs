@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using Newtonsoft.Json;
 using Shadowsocks.Controller;
 
 namespace Shadowsocks.Util
@@ -270,6 +271,52 @@ namespace Shadowsocks.Util
                     }
                 }
             }
+            return false;
+        }
+
+        public static bool SerializeToFile<T>(string path, T data)
+        {
+            try
+            {
+#if DEBUG
+                var content = JsonConvert.SerializeObject(data, Formatting.Indented);
+#else
+                var content = JsonConvert.SerializeObject(data, Formatting.None);
+#endif
+                File.WriteAllText(path, content);
+
+                return true;
+            }
+            catch (IOException e)
+            {
+                Logging.LogUsefulException(e);
+            }
+
+            return false;
+        }
+
+        public static bool DeserializeFromFile<T>(string path, out T data)
+        {
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    using (File.Create(path))
+                    {
+                        //do nothing
+                    }
+                }
+                var content = File.ReadAllText(path);
+                data = JsonConvert.DeserializeObject<T>(content);
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                Logging.LogUsefulException(e);
+            }
+
+            data = default(T);
             return false;
         }
     }

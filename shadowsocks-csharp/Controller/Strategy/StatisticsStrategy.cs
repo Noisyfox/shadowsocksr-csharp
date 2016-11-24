@@ -12,7 +12,7 @@ namespace Shadowsocks.Controller.Strategy
 {
     using Statistics = Dictionary<string, List<StatisticsRecord>>;
 
-    internal class StatisticsStrategy : IStrategy, IDisposable
+    internal class StatisticsStrategy : IStrategy
     {
         private readonly ShadowsocksController _controller;
         private Server _currentServer;
@@ -145,6 +145,14 @@ namespace Shadowsocks.Controller.Strategy
         public void SetFailure(Server server)
         {
             Logging.Debug($"failure: {server.FriendlyName()}");
+        }
+
+        public void Activate()
+        {
+        }
+
+        public void Deactivate()
+        {
         }
 
         public void UpdateLastRead(Server server)

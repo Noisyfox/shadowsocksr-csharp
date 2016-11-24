@@ -17,7 +17,7 @@ namespace Shadowsocks.Controller.Strategy
      *
      * Subclasses must be thread-safe
      */
-    public interface IStrategy
+    public interface IStrategy : IDisposable
     {
         string Name { get; }
 
@@ -52,5 +52,9 @@ namespace Shadowsocks.Controller.Strategy
          * TCPRelay will call this when fatal failure detected
          */
         void SetFailure(Server server);
+
+        void Activate();
+
+        void Deactivate();
     }
 }

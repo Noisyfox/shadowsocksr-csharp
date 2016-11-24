@@ -140,6 +140,7 @@
     <Compile Include="3rd\zxing\ResultPoint.cs" />
     <Compile Include="3rd\zxing\ResultPointCallback.cs" />
     <Compile Include="3rd\zxing\WriterException.cs" />
+    <Compile Include="Controller\Strategy\ManagedStrategy.cs" />
     <Compile Include="Controller\System\Hotkeys\HotkeyCallbacks.cs" />
     <Compile Include="Model\HotKeyConfig.cs" />
     <Compile Include="Model\ProxyConfig.cs" />

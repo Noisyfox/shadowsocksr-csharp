@@ -67,5 +67,17 @@ namespace Shadowsocks.Controller.Strategy
         {
             // do nothing
         }
+
+        public void Activate()
+        {
+        }
+
+        public void Deactivate()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }
