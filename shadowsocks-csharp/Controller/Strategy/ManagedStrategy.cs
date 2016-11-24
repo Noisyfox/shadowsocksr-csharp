@@ -43,6 +43,8 @@ namespace Shadowsocks.Controller.Strategy
         public abstract void Activate();
         public abstract void Deactivate();
         public abstract void Dispose();
+
+        public virtual List<MenuItem> MenuItems { get; } = null;
     }
 
 
