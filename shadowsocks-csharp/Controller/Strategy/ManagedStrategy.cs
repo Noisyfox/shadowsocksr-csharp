@@ -9,18 +9,14 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Newtonsoft.Json;
 using Shadowsocks.Model;
 using Shadowsocks.Util;
 
 namespace Shadowsocks.Controller.Strategy
 {
-    public abstract class ManagedStrategy<TConfig, TServerPersistence, TServerMemory> : IStrategy
-        where TConfig : new()
-        where TServerPersistence : new()
-        where TServerMemory : new()
+    public abstract class ManagedStrategy : IStrategy
     {
-        private static readonly string StrategyPath;
+        protected static readonly string StrategyPath;
 
         static ManagedStrategy()
         {
@@ -36,17 +32,27 @@ namespace Shadowsocks.Controller.Strategy
             }
         }
 
-
         public abstract string Name { get; }
         public abstract string ID { get; }
+        public abstract void ReloadServers();
         public abstract Server GetAServer(IStrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint);
         public abstract void UpdateLatency(Server server, TimeSpan latency);
         public abstract void UpdateLastRead(Server server);
         public abstract void UpdateLastWrite(Server server);
         public abstract void SetFailure(Server server);
+        public abstract void Activate();
+        public abstract void Deactivate();
+        public abstract void Dispose();
+    }
 
-        protected ShadowsocksController Controller { get; }
-        protected TConfig Config { get; private set; }
+
+    public abstract class ManagedStrategy<TConfig, TServerPersistence, TServerMemory> : ManagedStrategy
+        where TConfig : new()
+        where TServerPersistence : new()
+        where TServerMemory : new()
+    {
+        public ShadowsocksController Controller { get; }
+        public TConfig Config { get; private set; }
 
 
         private readonly SpinLock _persistenceLock = new SpinLock(true);
@@ -59,7 +65,7 @@ namespace Shadowsocks.Controller.Strategy
         private readonly string _configStorageFilePath;
         private readonly string _persistencesStorageFilePath;
 
-        private ReadOnlyCollection<Server> _currentServers = new List<Server>().AsReadOnly();
+        public ReadOnlyCollection<Server> CurrentServers { get; private set; } = new List<Server>().AsReadOnly();
 
         protected ManagedStrategy(ShadowsocksController controller)
         {
@@ -72,11 +78,11 @@ namespace Shadowsocks.Controller.Strategy
             LoadPersistData();
         }
 
-        public virtual void ReloadServers()
+        public override void ReloadServers()
         {
             var newServerList = Controller.GetConfigurationCopy().configs.AsReadOnly();
 
-            HashSet<Server> currentSet = new HashSet<Server>(_currentServers);
+            HashSet<Server> currentSet = new HashSet<Server>(CurrentServers);
             HashSet<Server> newSet = new HashSet<Server>(newServerList);
 
             var addSet = newSet.Except(currentSet);
@@ -103,20 +109,24 @@ namespace Shadowsocks.Controller.Strategy
                 SavePersistData();
             }
 
-            _currentServers = newServerList;
+            CurrentServers = newServerList;
         }
 
-        public virtual void Activate()
+        public override void Deactivate()
         {
+            using (AquirePersistenceExclusive())
+            {
+                SavePersistData();
+            }
+
+            using (AquireConfigExclusive())
+            {
+                SaveConfig();
+            }
         }
 
-        public virtual void Deactivate()
-        {
-        }
-        public virtual void Dispose()
-        {
-        }
 
+        #region Data Management
 
         private void LoadPersistData()
         {
@@ -184,23 +194,23 @@ namespace Shadowsocks.Controller.Strategy
         }
 
 
-        protected ServerData<TServerPersistence> AquirePersistenceExclusive()
+        public ServerData<TServerPersistence> AquirePersistenceExclusive()
         {
             return new ServerData<TServerPersistence>(_persistenceLock, _persistencesStorage);
         }
 
 
-        protected ServerData<TServerMemory> AquireMemoryExclusive()
+        public ServerData<TServerMemory> AquireMemoryExclusive()
         {
             return new ServerData<TServerMemory>(_memoryLock, _memoryStorage);
         }
 
-        protected Exclusive AquireConfigExclusive()
+        public Exclusive AquireConfigExclusive()
         {
             return new Exclusive(_configLock);
         }
 
-        protected class Exclusive : IDisposable
+        public class Exclusive : IDisposable
         {
             private readonly SpinLock _lock;
             private bool _taken = false;
@@ -223,7 +233,7 @@ namespace Shadowsocks.Controller.Strategy
             }
         }
 
-        protected class ServerData<TRes> : Exclusive
+        public class ServerData<TRes> : Exclusive
         {
             private readonly Dictionary<string, TRes> _data;
 
@@ -243,5 +253,8 @@ namespace Shadowsocks.Controller.Strategy
                 return default(TRes);
             }
         }
+
+        #endregion
+
     }
 }
