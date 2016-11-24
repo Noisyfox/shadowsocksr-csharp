@@ -249,9 +249,9 @@ namespace Shadowsocks.View
             return new MenuItem(I18N.GetString(text), click);
         }
 
-        private MenuItem CreateMenuGroup(string text, MenuItem[] items)
+        private MenuItem CreateMenuGroup(string text, MenuItem[] items, EventHandler click = null)
         {
-            return new MenuItem(I18N.GetString(text), items);
+            return new MenuItem(MenuMerge.Add, 0, Shortcut.None, I18N.GetString(text), click, null, null, items);
         }
 
         private void LoadMenu()
