@@ -243,14 +243,14 @@ namespace Shadowsocks.Controller.Strategy
             {
                 _lock = l;
 
-                Monitor.Enter(_lock, ref _taken);
+                _lock.Enter(ref _taken);
             }
 
             public void Dispose()
             {
                 if (_taken)
                 {
-                    Monitor.Exit(_lock);
+                    _lock.Exit();
                 }
 
                 GC.SuppressFinalize(this);
