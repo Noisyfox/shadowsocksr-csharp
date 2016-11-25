@@ -29,7 +29,6 @@ namespace Shadowsocks.Controller
         private Listener _listener;
         private PACServer _pacServer;
         private Configuration _config;
-        private StrategyManager _strategyManager;
         private PrivoxyRunner privoxyRunner;
         private GFWListUpdater gfwListUpdater;
         public AvailabilityStatistics availabilityStatistics = AvailabilityStatistics.Instance;
@@ -89,7 +88,7 @@ namespace Shadowsocks.Controller
         {
             _config = Configuration.Load();
             StatisticsConfiguration = StatisticsStrategyConfiguration.Load();
-            _strategyManager = new StrategyManager(this);
+            StrategyManager.InitInstance(this);
             StartReleasingMemory();
             StartTrafficStatistics(61);
         }
@@ -124,26 +123,26 @@ namespace Shadowsocks.Controller
             return _config;
         }
 
-        public IList<IStrategy> GetStrategies()
-        {
-            return _strategyManager.GetStrategies();
-        }
+        //public IList<IStrategy> GetStrategies()
+        //{
+        //    return StrategyManager.Instance.GetStrategies();
+        //}
 
-        public IStrategy GetCurrentStrategy()
+        //public IStrategy GetCurrentStrategy()
+        //{
+        //    return StrategyManager.Instance.GetStrategy(_config.strategy);
+        //}
+
+        public void SelectStrategy(string strategyID)
         {
-            foreach (var strategy in _strategyManager.GetStrategies())
-            {
-                if (strategy.ID == this._config.strategy)
-                {
-                    return strategy;
-                }
-            }
-            return null;
+            _config.index = -1;
+            _config.strategy = strategyID;
+            SaveConfig(_config);
         }
 
         public Server GetAServer(StrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint)
         {
-            IStrategy strategy = GetCurrentStrategy();
+            IStrategy strategy = StrategyManager.Instance.CurrentStrategy;
             if (strategy != null)
             {
                 return strategy.GetAServer(type, localIPEndPoint, destEndPoint);
@@ -247,14 +246,7 @@ namespace Shadowsocks.Controller
             SaveConfig(_config);
         }
 
-        public void SelectStrategy(string strategyID)
-        {
-            _config.index = -1;
-            _config.strategy = strategyID;
-            SaveConfig(_config);
-        }
-
-        public void Stop()
+        public void Stop(bool shutdown = false)
         {
             if (stopped)
             {
@@ -274,6 +266,12 @@ namespace Shadowsocks.Controller
                 SystemProxy.Update(_config, true, null);
             }
             Encryption.RNG.Close();
+            
+            StrategyManager.Instance.SetCurrentStrategy(null);
+            if (shutdown)
+            {
+                StrategyManager.ShutdownInstance();
+            }
         }
 
         public void TouchPACFile()
@@ -464,7 +462,8 @@ namespace Shadowsocks.Controller
             privoxyRunner.Stop();
             try
             {
-                var strategy = GetCurrentStrategy();
+                StrategyManager.Instance.SetCurrentStrategy(_config.strategy);
+                var strategy = StrategyManager.Instance.CurrentStrategy;
                 if (strategy != null)
                 {
                     strategy.ReloadServers();

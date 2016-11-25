@@ -664,7 +664,7 @@ namespace Shadowsocks.Controller
 
             var session = timer.Session;
             Server server = timer.Server;
-            IStrategy strategy = _controller.GetCurrentStrategy();
+            IStrategy strategy = StrategyManager.Instance.CurrentStrategy;
             strategy?.SetFailure(server);
             Logging.Info($"{server.FriendlyName()} timed out");
             session.Remote.Close();
@@ -695,7 +695,7 @@ namespace Shadowsocks.Controller
                 }
 
                 var latency = DateTime.Now - _startConnectTime;
-                IStrategy strategy = _controller.GetCurrentStrategy();
+                IStrategy strategy = StrategyManager.Instance.CurrentStrategy;
                 strategy?.UpdateLatency(_server, latency);
                 _tcprelay.UpdateLatency(_server, latency);
 
@@ -708,7 +708,7 @@ namespace Shadowsocks.Controller
             {
                 if (_server != null)
                 {
-                    IStrategy strategy = _controller.GetCurrentStrategy();
+                    IStrategy strategy = StrategyManager.Instance.CurrentStrategy;
                     strategy?.SetFailure(_server);
                 }
                 Logging.LogUsefulException(e);
@@ -750,7 +750,7 @@ namespace Shadowsocks.Controller
                         _encryptor.Decrypt(_remoteRecvBuffer, bytesRead, _remoteSendBuffer, out bytesToSend);
                     }
                     _connection.BeginSend(_remoteSendBuffer, 0, bytesToSend, SocketFlags.None, new AsyncCallback(PipeConnectionSendCallback), session);
-                    IStrategy strategy = _controller.GetCurrentStrategy();
+                    IStrategy strategy = StrategyManager.Instance.CurrentStrategy;
                     strategy?.UpdateLastRead(_server);
                 }
                 else
@@ -806,7 +806,7 @@ namespace Shadowsocks.Controller
             _tcprelay.UpdateOutboundCounter(_server, bytesToSend);
             _startSendingTime = DateTime.Now;
             session.Remote.BeginSend(_connetionSendBuffer, 0, bytesToSend, SocketFlags.None, new AsyncCallback(PipeRemoteSendCallback), session);
-            IStrategy strategy = _controller.GetCurrentStrategy();
+            IStrategy strategy = StrategyManager.Instance.CurrentStrategy;
             strategy?.UpdateLastWrite(_server);
         }
 

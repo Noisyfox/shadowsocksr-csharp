@@ -1,41 +1,41 @@
 ﻿using Shadowsocks.Controller;
 using Shadowsocks.Model;
+using Shadowsocks.Model.Strategy.Balancing;
+using Shadowsocks.Util;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
+using System.Windows.Forms;
 
 namespace Shadowsocks.Controller.Strategy
 {
-    class BalancingStrategy : IStrategy
+    class BalancingStrategy : ManagedStrategy<Config, int, int, int, int>
     {
-        ShadowsocksController _controller;
         Random _random;
 
-        public BalancingStrategy(ShadowsocksController controller)
+        private MenuItem _sameServerMenuItem;
+
+        public BalancingStrategy(ShadowsocksController controller) : base(controller)
         {
-            _controller = controller;
             _random = new Random();
+
+            SubMenuItems = new[] {
+                _sameServerMenuItem = ViewUtils.CreateMenuItem("Same Server for Same Site", SameServerClick)
+            };
+
+            UpdateMenuStatus();
         }
 
-        public string Name
-        {
-            get { return I18N.GetString("Load Balance"); }
-        }
+        public override string Name { get; } = I18N.GetString("Load Balance");
 
-        public string ID
-        {
-            get { return "com.shadowsocks.strategy.balancing"; }
-        }
+        public override string ID { get; } = "com.shadowsocks.strategy.balancing";
 
-        public void ReloadServers()
-        {
-            // do nothing
-        }
+        public override MenuItem[] SubMenuItems { get; }
 
-        public Server GetAServer(StrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint)
+        public override Server GetAServer(StrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint)
         {
-            var configs = _controller.GetCurrentConfiguration().configs;
+            var configs = CurrentServers;
             int index;
             if (type == StrategyCallerType.TCP)
             {
@@ -48,36 +48,53 @@ namespace Shadowsocks.Controller.Strategy
             return configs[index % configs.Count];
         }
 
-        public void UpdateLatency(Model.Server server, TimeSpan latency)
-        {
-            // do nothing
-        }
-
-        public void UpdateLastRead(Model.Server server)
-        {
-            // do nothing
-        }
-
-        public void UpdateLastWrite(Model.Server server)
-        {
-            // do nothing
-        }
-
-        public void SetFailure(Model.Server server)
-        {
-            // do nothing
-        }
-
-        public void Activate()
+        public override void UpdateLatency(Server server, TimeSpan latency)
         {
         }
 
-        public void Deactivate()
+        public override void UpdateLastRead(Server server)
         {
         }
 
-        public void Dispose()
+        public override void UpdateLastWrite(Server server)
         {
         }
+
+        public override void SetFailure(Server server)
+        {
+        }
+
+        public override void Activate()
+        {
+        }
+
+        public override void Dispose()
+        {
+        }
+
+
+        #region Menu & Config
+
+        private void UpdateMenuStatus()
+        {
+            using (AquireConfigExclusive())
+            {
+                _sameServerMenuItem.Checked = Config.sameServer;
+            }
+        }
+
+        private void SameServerClick(object sender, EventArgs eventArgs)
+        {
+            using (AquireConfigExclusive())
+            {
+                Config.sameServer = !Config.sameServer;
+
+                SaveConfig();
+            }
+
+            UpdateMenuStatus();
+        }
+
+        #endregion
     }
 }

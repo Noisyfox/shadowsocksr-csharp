@@ -124,11 +124,6 @@ namespace Shadowsocks.Controller.Strategy
             {
                 SavePersistData();
             }
-
-            using (AquireConfigExclusive())
-            {
-                SaveConfig();
-            }
         }
 
 

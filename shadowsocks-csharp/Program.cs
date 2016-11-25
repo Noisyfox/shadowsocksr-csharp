@@ -179,7 +179,7 @@ namespace Shadowsocks
             HotKeys.Destroy();
             if (MainController != null)
             {
-                MainController.Stop();
+                MainController.Stop(true);
                 MainController = null;
             }
         }

@@ -117,7 +117,7 @@ namespace Shadowsocks.Controller.Strategy
 
         private void LogWhenEnabled(string log)
         {
-            if (_controller.GetCurrentStrategy()?.ID == ID) //output when enabled
+            if (StrategyManager.Instance.CurrentStrategy?.ID == ID) //output when enabled
             {
                 Console.WriteLine(log);
             }

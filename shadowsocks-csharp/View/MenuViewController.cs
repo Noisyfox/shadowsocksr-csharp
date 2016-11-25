@@ -175,9 +175,9 @@ namespace Shadowsocks.View
             _notifyIcon.Icon = targetIcon;
 
             string serverInfo = null;
-            if (controller.GetCurrentStrategy() != null)
+            if (StrategyManager.Instance.CurrentStrategy != null)
             {
-                serverInfo = controller.GetCurrentStrategy().Name;
+                serverInfo = StrategyManager.Instance.CurrentStrategy.Name;
             }
             else
             {
@@ -413,7 +413,7 @@ namespace Shadowsocks.View
                 items.RemoveAt(0);
             }
             int i = 0;
-            foreach (var strategy in controller.GetStrategies())
+            foreach (var strategy in StrategyManager.Instance.GetStrategies())
             {
                 var ms = strategy as ManagedStrategy;
 
