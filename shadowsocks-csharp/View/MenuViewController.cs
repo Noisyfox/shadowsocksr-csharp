@@ -421,7 +421,7 @@ namespace Shadowsocks.View
 
                 if (ms != null)
                 {
-                    item = CreateMenuGroup(strategy.Name, ms.SubMenuItems, AServerItem_Click);
+                    item = CreateMenuGroup(strategy.Name, ms.SubMenuItems, AStrategyItem_Click);
                 }
                 else
                 {
