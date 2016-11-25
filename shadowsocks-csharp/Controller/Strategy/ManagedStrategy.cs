@@ -110,12 +110,12 @@ namespace Shadowsocks.Controller.Strategy
                         _persistencesStorage.ServerData.TryAdd(server.Identifier(), new TServerPersistence());
                         _memoryStorage.ServerData.TryAdd(server.Identifier(), new TServerMemory());
                     }
+                    CurrentServers = newServerList;
                 }
 
                 SavePersistData();
             }
 
-            CurrentServers = newServerList;
         }
 
         public override void Deactivate()
