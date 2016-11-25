@@ -107,8 +107,8 @@ namespace Shadowsocks.Controller.Strategy
 
                     foreach (var server in addSet)
                     {
-                        _persistencesStorage.ServerData.Add(server.Identifier(), new TServerPersistence());
-                        _memoryStorage.ServerData.Add(server.Identifier(), new TServerMemory());
+                        _persistencesStorage.ServerData.TryAdd(server.Identifier(), new TServerPersistence());
+                        _memoryStorage.ServerData.TryAdd(server.Identifier(), new TServerMemory());
                     }
                 }
 

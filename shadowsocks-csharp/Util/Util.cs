@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 using Newtonsoft.Json;
 using Shadowsocks.Controller;
+using System.Collections.Generic;
 
 namespace Shadowsocks.Util
 {
@@ -318,6 +319,18 @@ namespace Shadowsocks.Util
 
             data = default(T);
             return false;
+        }
+
+        public static bool TryAdd<K, V>(this Dictionary<K, V> d, K key, V value)
+        {
+            if (d.ContainsKey(key))
+            {
+                return false;
+            }
+
+            d.Add(key, value);
+
+            return true;
         }
     }
 }
