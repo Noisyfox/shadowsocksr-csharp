@@ -79,9 +79,9 @@ namespace Shadowsocks.Controller.Strategy
             ChooseNewServer();
         }
 
-        public Server GetAServer(IStrategyCallerType type, System.Net.IPEndPoint localIPEndPoint, EndPoint destEndPoint)
+        public Server GetAServer(StrategyCallerType type, System.Net.IPEndPoint localIPEndPoint, EndPoint destEndPoint)
         {
-            if (type == IStrategyCallerType.TCP)
+            if (type == StrategyCallerType.TCP)
             {
                 ChooseNewServer();
             }

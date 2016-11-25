@@ -33,11 +33,11 @@ namespace Shadowsocks.Controller.Strategy
             // do nothing
         }
 
-        public Server GetAServer(IStrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint)
+        public Server GetAServer(StrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint)
         {
             var configs = _controller.GetCurrentConfiguration().configs;
             int index;
-            if (type == IStrategyCallerType.TCP)
+            if (type == StrategyCallerType.TCP)
             {
                 index = _random.Next();
             }

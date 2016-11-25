@@ -184,7 +184,7 @@ namespace Shadowsocks.Controller
 
         public void CreateRemote()
         {
-            Server server = _controller.GetAServer(IStrategyCallerType.TCP, (IPEndPoint)_connection.RemoteEndPoint, _destEndPoint);
+            Server server = _controller.GetAServer(StrategyCallerType.TCP, (IPEndPoint)_connection.RemoteEndPoint, _destEndPoint);
             if (server == null || server.server == "")
                 throw new ArgumentException("No server configured");
             lock (_encryptionLock)

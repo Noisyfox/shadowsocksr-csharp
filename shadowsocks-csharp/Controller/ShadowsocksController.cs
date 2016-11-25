@@ -141,7 +141,7 @@ namespace Shadowsocks.Controller
             return null;
         }
 
-        public Server GetAServer(IStrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint)
+        public Server GetAServer(StrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint)
         {
             IStrategy strategy = GetCurrentStrategy();
             if (strategy != null)

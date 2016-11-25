@@ -35,7 +35,7 @@ namespace Shadowsocks.Controller.Strategy
         public abstract string Name { get; }
         public abstract string ID { get; }
         public abstract void ReloadServers();
-        public abstract Server GetAServer(IStrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint);
+        public abstract Server GetAServer(StrategyCallerType type, IPEndPoint localIPEndPoint, EndPoint destEndPoint);
         public abstract void UpdateLatency(Server server, TimeSpan latency);
         public abstract void UpdateLastRead(Server server);
         public abstract void UpdateLastWrite(Server server);
