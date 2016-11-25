@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Shadowsocks.Model;
 using Shadowsocks.Util;
+using Newtonsoft.Json;
 
 namespace Shadowsocks.Controller.Strategy
 {
@@ -48,25 +49,25 @@ namespace Shadowsocks.Controller.Strategy
     }
 
 
-    public abstract class ManagedStrategy<TConfig, TServerPersistence, TServerMemory> : ManagedStrategy
+    public abstract class ManagedStrategy<TConfig, TPersistence, TServerPersistence, TMemory, TServerMemory> : ManagedStrategy
         where TConfig : new()
+        where TPersistence : new()
         where TServerPersistence : new()
+        where TMemory : new()
         where TServerMemory : new()
     {
+
         public ShadowsocksController Controller { get; }
-        public TConfig Config { get; private set; }
-
-
-        private readonly SpinLock _persistenceLock = new SpinLock(true);
-        private readonly SpinLock _memoryLock = new SpinLock(true);
+        
         private readonly SpinLock _configLock = new SpinLock(true);
 
-        private readonly Dictionary<string, TServerPersistence> _persistencesStorage = new Dictionary<string, TServerPersistence>();
-        private readonly Dictionary<string, TServerMemory> _memoryStorage = new Dictionary<string, TServerMemory>();
+        private readonly StrategyDataStorage<TPersistence, TServerPersistence> _persistencesStorage;
+        private readonly StrategyDataStorage<TMemory, TServerMemory> _memoryStorage;
 
         private readonly string _configStorageFilePath;
         private readonly string _persistencesStorageFilePath;
 
+        public TConfig Config { get; }
         public ReadOnlyCollection<Server> CurrentServers { get; private set; } = new List<Server>().AsReadOnly();
 
         protected ManagedStrategy(ShadowsocksController controller)
@@ -76,8 +77,11 @@ namespace Shadowsocks.Controller.Strategy
             _configStorageFilePath = Path.Combine(StrategyPath, $"{ID}.config.json");
             _persistencesStorageFilePath = Path.Combine(StrategyPath, $"{ID}.persist.json");
 
-            LoadConfig();
-            LoadPersistData();
+            _memoryStorage = new StrategyDataStorage<TMemory, TServerMemory>();
+            _memoryStorage.Init();
+
+            Config = LoadConfig();
+            _persistencesStorage = LoadPersistData();
         }
 
         public override void ReloadServers()
@@ -97,14 +101,14 @@ namespace Shadowsocks.Controller.Strategy
 
                     foreach (var server in removeSet)
                     {
-                        _persistencesStorage.Remove(server.Identifier());
-                        _memoryStorage.Remove(server.Identifier());
+                        _persistencesStorage.ServerData.Remove(server.Identifier());
+                        _memoryStorage.ServerData.Remove(server.Identifier());
                     }
 
                     foreach (var server in addSet)
                     {
-                        _persistencesStorage.Add(server.Identifier(), new TServerPersistence());
-                        _memoryStorage.Add(server.Identifier(), new TServerMemory());
+                        _persistencesStorage.ServerData.Add(server.Identifier(), new TServerPersistence());
+                        _memoryStorage.ServerData.Add(server.Identifier(), new TServerMemory());
                     }
                 }
 
@@ -130,32 +134,53 @@ namespace Shadowsocks.Controller.Strategy
 
         #region Data Management
 
-        private void LoadPersistData()
+        [Serializable]
+        private class StrategyDataStorage<TData, TServerData>
+            where TData : new()
+            where TServerData : new()
+        {
+            [JsonIgnore]
+            public SpinLock Lock { get; } = new SpinLock();
+
+            public TData Data;
+            public Dictionary<string, TServerData> ServerData;
+
+            public void Init()
+            {
+                if (Data == null)
+                {
+                    Data = new TData();
+                }
+                if (ServerData == null)
+                {
+                    ServerData = new Dictionary<string, TServerData>();
+                }
+            }
+        }
+
+        private StrategyDataStorage<TPersistence, TServerPersistence> LoadPersistData()
         {
             var path = _persistencesStorageFilePath;
             Logging.Debug($"loading persist data from {path}");
 
-            Dictionary<string, TServerPersistence> data;
+            StrategyDataStorage<TPersistence, TServerPersistence> storage;
 
-            if (Utils.DeserializeFromFile(path, out data))
-            {
-                _persistencesStorage.Clear();
-
-                if (data != null)
-                {
-                    foreach (var kv in data)
-                    {
-                        _persistencesStorage.Add(kv.Key, kv.Value);
-                    }
-                }
-            }
-            else
+            if (!Utils.DeserializeFromFile(path, out storage))
             {
                 Console.WriteLine("failed to load persist data");
             }
+
+            if (storage == null)
+            {
+                storage = new StrategyDataStorage<TPersistence, TServerPersistence>();
+            }
+
+            storage.Init();
+
+            return storage;
         }
 
-        private void LoadConfig()
+        private TConfig LoadConfig()
         {
             var path = _configStorageFilePath;
             Logging.Debug($"loading config from {path}");
@@ -172,18 +197,16 @@ namespace Shadowsocks.Controller.Strategy
                 data = new TConfig();
             }
 
-            Config = data;
+            return data;
         }
 
         public void SavePersistData()
         {
             var path = _persistencesStorageFilePath;
 
-            Dictionary<string, TServerPersistence> d = new Dictionary<string, TServerPersistence>(_persistencesStorage);
-
             Logging.Debug($"save persist data to {path}");
 
-            Utils.SerializeToFile(path, d);
+            Utils.SerializeToFile(path, _persistencesStorage);
         }
 
         protected void SaveConfig()
@@ -196,15 +219,14 @@ namespace Shadowsocks.Controller.Strategy
         }
 
 
-        public ServerData<TServerPersistence> AquirePersistenceExclusive()
+        public ManagedData<TPersistence, TServerPersistence> AquirePersistenceExclusive()
         {
-            return new ServerData<TServerPersistence>(_persistenceLock, _persistencesStorage);
+            return new ManagedData<TPersistence, TServerPersistence>(_persistencesStorage.Lock, _persistencesStorage.Data, _persistencesStorage.ServerData);
         }
 
-
-        public ServerData<TServerMemory> AquireMemoryExclusive()
+        public ManagedData<TMemory, TServerMemory> AquireMemoryExclusive()
         {
-            return new ServerData<TServerMemory>(_memoryLock, _memoryStorage);
+            return new ManagedData<TMemory, TServerMemory>(_memoryStorage.Lock, _memoryStorage.Data, _memoryStorage.ServerData);
         }
 
         public Exclusive AquireConfigExclusive()
@@ -235,25 +257,28 @@ namespace Shadowsocks.Controller.Strategy
             }
         }
 
-        public class ServerData<TRes> : Exclusive
+        public class ManagedData<TData, TServerData> : Exclusive
         {
-            private readonly Dictionary<string, TRes> _data;
+            private readonly Dictionary<string, TServerData> _serverData;
 
-            protected internal ServerData(SpinLock l, Dictionary<string, TRes> data) : base(l)
+            protected internal ManagedData(SpinLock l, TData data, Dictionary<string, TServerData> serverData) : base(l)
             {
-                _data = data;
+                Data = data;
+                _serverData = serverData;
             }
 
-            public TRes GetData(Server server)
+            public TServerData GetData(Server server)
             {
                 string key = server.Identifier();
-                if (_data.ContainsKey(key))
+                if (_serverData.ContainsKey(key))
                 {
-                    return _data[key];
+                    return _serverData[key];
                 }
 
-                return default(TRes);
+                return default(TServerData);
             }
+
+            public TData Data { get; }
         }
 
         #endregion
