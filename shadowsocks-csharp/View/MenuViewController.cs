@@ -14,6 +14,9 @@ using Shadowsocks.Model;
 using Shadowsocks.Properties;
 using Shadowsocks.Util;
 
+using static Shadowsocks.Util.ViewUtils;
+using Shadowsocks.Controller.Strategy;
+
 namespace Shadowsocks.View
 {
     public class MenuViewController
@@ -244,16 +247,6 @@ namespace Shadowsocks.View
 
         #region MenuItems and MenuGroups
 
-        private MenuItem CreateMenuItem(string text, EventHandler click)
-        {
-            return new MenuItem(I18N.GetString(text), click);
-        }
-
-        private MenuItem CreateMenuGroup(string text, MenuItem[] items, EventHandler click = null)
-        {
-            return new MenuItem(MenuMerge.Add, 0, Shortcut.None, I18N.GetString(text), click, null, null, items);
-        }
-
         private void LoadMenu()
         {
             this.contextMenu1 = new ContextMenu(new MenuItem[] {
@@ -422,9 +415,20 @@ namespace Shadowsocks.View
             int i = 0;
             foreach (var strategy in controller.GetStrategies())
             {
-                MenuItem item = new MenuItem(strategy.Name);
+                var ms = strategy as ManagedStrategy;
+
+                MenuItem item;
+
+                if (ms != null)
+                {
+                    item = CreateMenuGroup(strategy.Name, ms.SubMenuItems, AServerItem_Click);
+                }
+                else
+                {
+                    item = CreateMenuItem(strategy.Name, AStrategyItem_Click);
+                }
+
                 item.Tag = strategy.ID;
-                item.Click += AStrategyItem_Click;
                 items.Add(i, item);
                 i++;
             }
