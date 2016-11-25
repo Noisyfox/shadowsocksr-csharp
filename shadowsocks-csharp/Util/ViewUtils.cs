@@ -26,9 +26,9 @@ namespace Shadowsocks.Util
             return new MenuItem(I18N.GetString(text), click);
         }
 
-        public static MenuItem CreateMenuGroup(string text, MenuItem[] items, EventHandler click = null)
+        public static MenuItem CreateMenuGroup(string text, MenuItem[] items)
         {
-            return new MenuItem(MenuMerge.Add, 0, Shortcut.None, I18N.GetString(text), click, null, null, items);
+            return new MenuItem(I18N.GetString(text), items);
         }
 
         // Workaround NotifyIcon's 63 chars limit

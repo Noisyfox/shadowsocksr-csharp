@@ -421,14 +421,30 @@ namespace Shadowsocks.View
 
                 if (ms != null)
                 {
-                    item = CreateMenuGroup(strategy.Name, ms.SubMenuItems, AStrategyItem_Click);
+                    var subMenu = ms.SubMenuItems;
+                    if (subMenu?.Length > 0)
+                    {
+                        var s = new MenuItem[subMenu.Length + 2];
+                        Array.Copy(subMenu, 0, s, 2, subMenu.Length);
+
+                        var on = s[0] = CreateMenuItem("Enable", AStrategyItem_Click);
+                        s[1] = new MenuItem("-");
+                        on.Tag = strategy.ID;
+
+                        item = CreateMenuGroup(strategy.Name, s);
+                    }
+                    else
+                    {
+                        item = CreateMenuItem(strategy.Name, AStrategyItem_Click);
+                        item.Tag = strategy.ID;
+                    }
                 }
                 else
                 {
                     item = CreateMenuItem(strategy.Name, AStrategyItem_Click);
+                    item.Tag = strategy.ID;
                 }
 
-                item.Tag = strategy.ID;
                 items.Add(i, item);
                 i++;
             }
@@ -447,12 +463,18 @@ namespace Shadowsocks.View
                 i++;
             }
 
-            foreach (MenuItem item in items)
+            UpdateCheckedServer(configuration, ServersItem);
+        }
+
+        private void UpdateCheckedServer(Configuration configuration, MenuItem item)
+        {
+            if (item.Tag != null && (item.Tag.ToString() == configuration.index.ToString() || item.Tag.ToString() == configuration.strategy))
             {
-                if (item.Tag != null && (item.Tag.ToString() == configuration.index.ToString() || item.Tag.ToString() == configuration.strategy))
-                {
-                    item.Checked = true;
-                }
+                item.Checked = true;
+            }
+
+            foreach(MenuItem i in item.MenuItems){
+                UpdateCheckedServer(configuration, i);
             }
         }
 
