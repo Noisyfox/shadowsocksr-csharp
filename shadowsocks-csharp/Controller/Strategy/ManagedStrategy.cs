@@ -119,7 +119,7 @@ namespace Shadowsocks.Controller.Strategy
         {
             var newServerList = Controller.GetConfigurationCopy().configs.AsReadOnly();
 
-            if (_usePersistence || _usePersistence)
+            if (_usePersistence || _useMemory)
             {
                 HashSet<Server> currentSet = new HashSet<Server>(CurrentServers);
                 HashSet<Server> newSet = new HashSet<Server>(newServerList);
