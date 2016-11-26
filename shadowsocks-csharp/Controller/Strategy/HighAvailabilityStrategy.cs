@@ -1,95 +1,40 @@
 ﻿using Shadowsocks.Model;
 using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Text;
+using Shadowsocks.Model.Strategy.HighAvailability;
 
 namespace Shadowsocks.Controller.Strategy
 {
-    class HighAvailabilityStrategy : IStrategy
+    class HighAvailabilityStrategy : ManagedStrategy<int, int, int, MaxServer, ServerStatus>
     {
-        protected ServerStatus _currentServer;
-        protected Dictionary<Server, ServerStatus> _serverStatus;
-        ShadowsocksController _controller;
-        Random _random;
 
-        public class ServerStatus
+        public HighAvailabilityStrategy(ShadowsocksController controller) : base(controller, false, false, true)
         {
-            // time interval between SYN and SYN+ACK
-            public TimeSpan latency;
-            public DateTime lastTimeDetectLatency;
-
-            // last time anything received
-            public DateTime lastRead;
-
-            // last time anything sent
-            public DateTime lastWrite;
-
-            // connection refused or closed before anything received
-            public DateTime lastFailure;
-
-            public Server server;
-
-            public double score;
         }
 
-        public HighAvailabilityStrategy(ShadowsocksController controller)
-        {
-            _controller = controller;
-            _random = new Random();
-            _serverStatus = new Dictionary<Server, ServerStatus>();
-        }
+        public override string Name { get; } = I18N.GetString("High Availability");
 
-        public string Name
-        {
-            get { return I18N.GetString("High Availability"); }
-        }
+        public override string ID { get; } = "com.shadowsocks.strategy.ha";
 
-        public string ID
+        public override void ReloadServers()
         {
-            get { return "com.shadowsocks.strategy.ha"; }
-        }
-
-        public void ReloadServers()
-        {
-            // make a copy to avoid locking
-            var newServerStatus = new Dictionary<Server, ServerStatus>(_serverStatus);
-
-            foreach (var server in _controller.GetCurrentConfiguration().configs)
-            {
-                if (!newServerStatus.ContainsKey(server))
-                {
-                    var status = new ServerStatus();
-                    status.server = server;
-                    status.lastFailure = DateTime.MinValue;
-                    status.lastRead = DateTime.Now;
-                    status.lastWrite = DateTime.Now;
-                    status.latency = new TimeSpan(0, 0, 0, 0, 10);
-                    status.lastTimeDetectLatency = DateTime.Now;
-                    newServerStatus[server] = status;
-                }
-                else
-                {
-                    // update settings for existing server
-                    newServerStatus[server].server = server;
-                }
-            }
-            _serverStatus = newServerStatus;
+            base.ReloadServers();
 
             ChooseNewServer();
         }
 
-        public Server GetAServer(StrategyCallerType type, System.Net.IPEndPoint localIPEndPoint, EndPoint destEndPoint)
+        public override Server GetAServer(StrategyCallerType type, System.Net.IPEndPoint localIPEndPoint,
+            EndPoint destEndPoint)
         {
             if (type == StrategyCallerType.TCP)
             {
                 ChooseNewServer();
             }
-            if (_currentServer == null)
+
+            using (var d = AquireMemoryExclusive())
             {
-                return null;
+                return d.Data.server;
             }
-            return _currentServer.server;
         }
 
         /**
@@ -98,100 +43,124 @@ namespace Shadowsocks.Controller.Strategy
          * and (now - last read) <  5s  // means not stuck
          * and latency < 200ms, try after 30s
          */
-        public void ChooseNewServer()
+        private void ChooseNewServer()
         {
-            ServerStatus oldServer = _currentServer;
-            List<ServerStatus> servers = new List<ServerStatus>(_serverStatus.Values);
             DateTime now = DateTime.Now;
-            foreach (var status in servers)
+
+            using (var d = AquireMemoryExclusive())
             {
-                // all of failure, latency, (lastread - lastwrite) normalized to 1000, then
-                // 100 * failure - 2 * latency - 0.5 * (lastread - lastwrite)
-                status.score =
-                    100 * 1000 * Math.Min(5 * 60, (now - status.lastFailure).TotalSeconds)
-                    -2 * 5 * (Math.Min(2000, status.latency.TotalMilliseconds) / (1 + (now - status.lastTimeDetectLatency).TotalSeconds / 30 / 10) +
-                    -0.5 * 200 * Math.Min(5, (status.lastRead - status.lastWrite).TotalSeconds));
-                Logging.Debug(String.Format("server: {0} latency:{1} score: {2}", status.server.FriendlyName(), status.latency, status.score));
-            }
-            ServerStatus max = null;
-            foreach (var status in servers)
-            {
-                if (max == null)
+                ServerStatus max = null;
+                Server maxServer = null;
+
+                foreach (var server in CurrentServers)
                 {
-                    max = status;
-                }
-                else
-                {
-                    if (status.score >= max.score)
+                    var status = d.GetData(server);
+                    // all of failure, latency, (lastread - lastwrite) normalized to 1000, then
+                    // 100 * failure - 2 * latency - 0.5 * (lastread - lastwrite)
+                    status.score =
+                        100*1000*Math.Min(5*60, (now - status.lastFailure).TotalSeconds)
+                        -
+                        2*5*
+                        (Math.Min(2000, status.latency.TotalMilliseconds)/
+                         (1 + (now - status.lastTimeDetectLatency).TotalSeconds/30/10) +
+                         -0.5*200*Math.Min(5, (status.lastRead - status.lastWrite).TotalSeconds));
+                    
+
+                    Logging.Debug($"server: {server.FriendlyName()} latency:{status.latency} score: {status.score}");
+
+
+                    if (max == null)
                     {
                         max = status;
+                        maxServer = server;
+                    }
+                    else
+                    {
+                        if (status.score >= max.score)
+                        {
+                            max = status;
+                            maxServer = server;
+                        }
                     }
                 }
-            }
-            if (max != null)
-            {
-                if (_currentServer == null || max.score - _currentServer.score > 200)
+                if (max != null && (d.Data.server == null || max.score - d.Data.score > 200))
                 {
-                    _currentServer = max;
-                    Logging.Info($"HA switching to server: {_currentServer.server.FriendlyName()}");
+                    d.Data.server = maxServer;
+                    d.Data.score = max.score;
+
+                    Logging.Info($"HA switching to server: {maxServer.FriendlyName()}");
                 }
             }
         }
 
-        public void UpdateLatency(Model.Server server, TimeSpan latency)
+        public override void UpdateLatency(Model.Server server, TimeSpan latency)
         {
             Logging.Debug($"latency: {server.FriendlyName()} {latency}");
 
-            ServerStatus status;
-            if (_serverStatus.TryGetValue(server, out status))
+
+            using (var d = AquireMemoryExclusive())
             {
-                status.latency = latency;
-                status.lastTimeDetectLatency = DateTime.Now;
+                ServerStatus status;
+                if (d.TryGetData(server, out status))
+                {
+                    status.latency = latency;
+                    status.lastTimeDetectLatency = DateTime.Now;
+                }
+
             }
         }
 
-        public void UpdateLastRead(Model.Server server)
+        public override void UpdateLastRead(Model.Server server)
         {
             Logging.Debug($"last read: {server.FriendlyName()}");
 
-            ServerStatus status;
-            if (_serverStatus.TryGetValue(server, out status))
+            using (var d = AquireMemoryExclusive())
             {
-                status.lastRead = DateTime.Now;
+                ServerStatus status;
+                if (d.TryGetData(server, out status))
+                {
+                    status.lastRead = DateTime.Now;
+                }
             }
         }
 
-        public void UpdateLastWrite(Model.Server server)
+        public override void UpdateLastWrite(Model.Server server)
         {
             Logging.Debug($"last write: {server.FriendlyName()}");
 
-            ServerStatus status;
-            if (_serverStatus.TryGetValue(server, out status))
+            using (var d = AquireMemoryExclusive())
             {
-                status.lastWrite = DateTime.Now;
+                ServerStatus status;
+                if (d.TryGetData(server, out status))
+                {
+                    status.lastWrite = DateTime.Now;
+                }
             }
         }
 
-        public void SetFailure(Model.Server server)
+        public override void SetFailure(Model.Server server)
         {
             Logging.Debug($"failure: {server.FriendlyName()}");
 
-            ServerStatus status;
-            if (_serverStatus.TryGetValue(server, out status))
+            using (var d = AquireMemoryExclusive())
             {
-                status.lastFailure = DateTime.Now;
+                ServerStatus status;
+                if (d.TryGetData(server, out status))
+                {
+                    status.lastFailure = DateTime.Now;
+                }
             }
         }
 
-        public void Activate()
+        public override void Activate()
         {
         }
 
-        public void Deactivate()
+        public override void Deactivate()
         {
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
         }
     }

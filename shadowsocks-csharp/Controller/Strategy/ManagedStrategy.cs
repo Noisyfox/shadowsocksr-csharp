@@ -376,6 +376,11 @@ namespace Shadowsocks.Controller.Strategy
                 return default(TServerData);
             }
 
+            public bool TryGetData(Server server, out TServerData data)
+            {
+                return _serverData.TryGetValue(server.Identifier(), out data);
+            }
+
             public TData Data { get; }
         }
 
