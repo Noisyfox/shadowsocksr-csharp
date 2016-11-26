@@ -67,62 +67,140 @@ namespace Shadowsocks.Controller.Strategy
         private readonly string _configStorageFilePath;
         private readonly string _persistencesStorageFilePath;
 
-        public TConfig Config { get; }
+        private readonly TConfig _config;
+
+        public TConfig Config
+        {
+            get
+            {
+                if (!_useConfig)
+                {
+                    throw new NotSupportedException("useConfig=false!");
+                }
+
+                return _config;
+            }
+        }
+
         public ReadOnlyCollection<Server> CurrentServers { get; private set; } = new List<Server>().AsReadOnly();
 
-        protected ManagedStrategy(ShadowsocksController controller)
+
+        private readonly bool _useConfig;
+        private readonly bool _usePersistence;
+        private readonly bool _useMemory;
+
+        protected ManagedStrategy(ShadowsocksController controller, bool useConfig = false, bool usePersistence = false,
+            bool useMemory = false)
         {
             Controller = controller;
+
+            _useConfig = useConfig;
+            _usePersistence = usePersistence;
+            _useMemory = useMemory;
 
             _configStorageFilePath = Path.Combine(StrategyPath, $"{ID}.config.json");
             _persistencesStorageFilePath = Path.Combine(StrategyPath, $"{ID}.persist.json");
 
-            _memoryStorage = new StrategyDataStorage<TMemory, TServerMemory>();
-            _memoryStorage.Init();
+            if (useMemory)
+            {
+                _memoryStorage = new StrategyDataStorage<TMemory, TServerMemory>();
+                _memoryStorage.Init();
+            }
+            else
+            {
+                _memoryStorage = null;
+            }
 
-            Config = LoadConfig();
-            _persistencesStorage = LoadPersistData();
+            _config = useConfig ? LoadConfig() : default(TConfig);
+            _persistencesStorage = usePersistence ? LoadPersistData() : null;
         }
 
         public override void ReloadServers()
         {
             var newServerList = Controller.GetConfigurationCopy().configs.AsReadOnly();
 
-            HashSet<Server> currentSet = new HashSet<Server>(CurrentServers);
-            HashSet<Server> newSet = new HashSet<Server>(newServerList);
-
-            var addSet = newSet.Except(currentSet);
-            var removeSet = currentSet.Except(newSet);
-
-            using (AquirePersistenceExclusive())
+            if (_usePersistence || _usePersistence)
             {
-                using (AquireMemoryExclusive())
+                HashSet<Server> currentSet = new HashSet<Server>(CurrentServers);
+                HashSet<Server> newSet = new HashSet<Server>(newServerList);
+
+                var addSet = newSet.Except(currentSet);
+                var removeSet = currentSet.Except(newSet);
+
+                if (_usePersistence && _useMemory)
                 {
-
-                    foreach (var server in removeSet)
+                    using (AquirePersistenceExclusive())
                     {
-                        _persistencesStorage.ServerData.Remove(server.Identifier());
-                        _memoryStorage.ServerData.Remove(server.Identifier());
-                    }
+                        using (AquireMemoryExclusive())
+                        {
 
-                    foreach (var server in addSet)
-                    {
-                        _persistencesStorage.ServerData.TryAdd(server.Identifier(), new TServerPersistence());
-                        _memoryStorage.ServerData.TryAdd(server.Identifier(), new TServerMemory());
+                            foreach (var server in removeSet)
+                            {
+                                _persistencesStorage.ServerData.Remove(server.Identifier());
+                                _memoryStorage.ServerData.Remove(server.Identifier());
+                            }
+
+                            foreach (var server in addSet)
+                            {
+                                _persistencesStorage.ServerData.TryAdd(server.Identifier(), new TServerPersistence());
+                                _memoryStorage.ServerData.TryAdd(server.Identifier(), new TServerMemory());
+                            }
+                            CurrentServers = newServerList;
+                        }
+
+                        SavePersistData();
                     }
-                    CurrentServers = newServerList;
                 }
+                else if (_usePersistence)
+                {
+                    using (AquirePersistenceExclusive())
+                    {
+                        foreach (var server in removeSet)
+                        {
+                            _persistencesStorage.ServerData.Remove(server.Identifier());
+                        }
 
-                SavePersistData();
+                        foreach (var server in addSet)
+                        {
+                            _persistencesStorage.ServerData.TryAdd(server.Identifier(), new TServerPersistence());
+                        }
+
+                        SavePersistData();
+
+                        CurrentServers = newServerList;
+                    }
+                }
+                else
+                {
+                    using (AquireMemoryExclusive())
+                    {
+                        foreach (var server in removeSet)
+                        {
+                            _memoryStorage.ServerData.Remove(server.Identifier());
+                        }
+
+                        foreach (var server in addSet)
+                        {
+                            _memoryStorage.ServerData.TryAdd(server.Identifier(), new TServerMemory());
+                        }
+                        CurrentServers = newServerList;
+                    }
+                }
             }
-
+            else
+            {
+                CurrentServers = newServerList;
+            }
         }
 
         public override void Deactivate()
         {
-            using (AquirePersistenceExclusive())
+            if (_usePersistence)
             {
-                SavePersistData();
+                using (AquirePersistenceExclusive())
+                {
+                    SavePersistData();
+                }
             }
         }
 
@@ -197,6 +275,11 @@ namespace Shadowsocks.Controller.Strategy
 
         public void SavePersistData()
         {
+            if (!_usePersistence)
+            {
+                throw new NotSupportedException("usePersistence=false!");
+            }
+
             var path = _persistencesStorageFilePath;
 
             Logging.Debug($"save persist data to {path}");
@@ -206,6 +289,11 @@ namespace Shadowsocks.Controller.Strategy
 
         protected void SaveConfig()
         {
+            if (!_useConfig)
+            {
+                throw new NotSupportedException("useConfig=false!");
+            }
+
             var path = _configStorageFilePath;
 
             Logging.Debug($"save config to {path}");
@@ -216,16 +304,31 @@ namespace Shadowsocks.Controller.Strategy
 
         public ManagedData<TPersistence, TServerPersistence> AquirePersistenceExclusive()
         {
+            if (!_usePersistence)
+            {
+                throw new NotSupportedException("usePersistence=false!");
+            }
+
             return new ManagedData<TPersistence, TServerPersistence>(_persistencesStorage.Lock, _persistencesStorage.Data, _persistencesStorage.ServerData);
         }
 
         public ManagedData<TMemory, TServerMemory> AquireMemoryExclusive()
         {
+            if (!_useMemory)
+            {
+                throw new NotSupportedException("useMemory=false!");
+            }
+
             return new ManagedData<TMemory, TServerMemory>(_memoryStorage.Lock, _memoryStorage.Data, _memoryStorage.ServerData);
         }
 
         public Exclusive AquireConfigExclusive()
         {
+            if (!_useConfig)
+            {
+                throw new NotSupportedException("useConfig=false!");
+            }
+
             return new Exclusive(_configLock);
         }
 

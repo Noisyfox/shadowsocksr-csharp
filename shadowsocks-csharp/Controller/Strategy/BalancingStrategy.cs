@@ -16,7 +16,7 @@ namespace Shadowsocks.Controller.Strategy
 
         private MenuItem _sameServerMenuItem;
 
-        public BalancingStrategy(ShadowsocksController controller) : base(controller)
+        public BalancingStrategy(ShadowsocksController controller) : base(controller, true)
         {
             _random = new Random();
 
