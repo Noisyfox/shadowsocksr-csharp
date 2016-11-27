@@ -39,7 +39,7 @@ namespace Shadowsocks.View
 
         #region chart
         long lastMaxSpeed;
-        ShadowsocksController.QueueLast<TrafficInfo> traffic = new ShadowsocksController.QueueLast<TrafficInfo>();
+        TrafficStatisticsService.QueueLast<TrafficInfo> traffic = new TrafficStatisticsService.QueueLast<TrafficInfo>();
         #endregion
 
         public LogForm(ShadowsocksController controller, string filename)
@@ -58,7 +58,7 @@ namespace Shadowsocks.View
             LogMessageTextBox.ForeColor = config.TextColor;
             LogMessageTextBox.Font = config.Font;
 
-            controller.TrafficChanged += controller_TrafficChanged;
+            TrafficStatisticsService.TrafficChanged += controller_TrafficChanged;
 
             UpdateTexts();
         }
@@ -121,12 +121,12 @@ namespace Shadowsocks.View
             }
         }
 
-        private void controller_TrafficChanged(object sender, EventArgs e)
+        private void controller_TrafficChanged(object sender, TrafficStatisticsService.QueueLast<TrafficStatisticsService.TrafficPerSecond> t)
         {
             lock (_lock)
             {
-                traffic = new ShadowsocksController.QueueLast<TrafficInfo>();
-                foreach (var trafficPerSecond in controller.traffic)
+                traffic = new TrafficStatisticsService.QueueLast<TrafficInfo>();
+                foreach (var trafficPerSecond in t)
                 {
                     traffic.Enqueue(new TrafficInfo(trafficPerSecond.inboundIncreasement, trafficPerSecond.outboundIncreasement));
                 }
@@ -215,7 +215,7 @@ namespace Shadowsocks.View
             }
 
             this.Text = I18N.GetString("Log Viewer") +
-                $" [in: {Utils.FormatBytes(controller.InboundCounter)}, out: {Utils.FormatBytes(controller.OutboundCounter)}]";
+                $" [in: {Utils.FormatBytes(TrafficStatisticsService.InboundCounter)}, out: {Utils.FormatBytes(TrafficStatisticsService.OutboundCounter)}]";
         }
 
         private void LogForm_Load(object sender, EventArgs e)
@@ -252,7 +252,7 @@ namespace Shadowsocks.View
         private void LogForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             timer.Stop();
-            controller.TrafficChanged -= controller_TrafficChanged;
+            TrafficStatisticsService.TrafficChanged -= controller_TrafficChanged;
             LogViewerConfig config = controller.GetConfigurationCopy().logViewer;
 
             config.topMost = topMostTrigger;

@@ -16,7 +16,7 @@ namespace Shadowsocks.Controller
 {
     using Statistics = Dictionary<string, List<StatisticsRecord>>;
 
-    public sealed class AvailabilityStatistics : IDisposable
+    public sealed class AvailabilityStatistics : IDisposable, IStatisticsService
     {
         public const string DateTimePattern = "yyyy-MM-dd HH:mm:ss";
         private const string StatisticsFilesName = "shadowsocks.availability.json";
@@ -94,11 +94,14 @@ namespace Shadowsocks.Controller
         internal void UpdateConfiguration(ShadowsocksController controller)
         {
             _controller = controller;
+            _controller.UnregisterStatisticsService(this);
             Reset();
             try
             {
                 if (Config.StatisticsEnabled)
                 {
+                    _controller.RegisterStatisticsService(this);
+
                     StartTimerWithoutState(ref _recorder, Run, RecordingInterval);
                     LoadRawStatistics();
                     StartTimerWithoutState(ref _speedMonior, UpdateSpeed, _monitorInterval);
@@ -332,12 +335,14 @@ namespace Shadowsocks.Controller
             _speedMonior.Dispose();
         }
 
-        public void UpdateLatency(Server server, int latency)
+        public string ID { get; } = typeof(AvailabilityStatistics).FullName;
+
+        public void UpdateLatency(Server server, TimeSpan latency)
         {
             _latencyRecords.GetOrAdd(server.Identifier(), (k) =>
             {
                 List<int> records = new List<int>();
-                records.Add(latency);
+                records.Add((int)latency.TotalMilliseconds);
                 return records;
             });
         }

@@ -87,7 +87,7 @@ namespace Shadowsocks.View
             _notifyIcon.MouseClick += notifyIcon1_Click;
             _notifyIcon.MouseDoubleClick += notifyIcon1_DoubleClick;
             _notifyIcon.BalloonTipClosed += _notifyIcon_BalloonTipClosed;
-            controller.TrafficChanged += controller_TrafficChanged;
+            TrafficStatisticsService.TrafficChanged += controller_TrafficChanged;
 
             this.updateChecker = new UpdateChecker();
             updateChecker.CheckUpdateCompleted += updateChecker_CheckUpdateCompleted;
@@ -108,15 +108,15 @@ namespace Shadowsocks.View
             }
         }
 
-        private void controller_TrafficChanged(object sender, EventArgs e)
+        private void controller_TrafficChanged(object sender, TrafficStatisticsService.QueueLast<TrafficStatisticsService.TrafficPerSecond> traffic)
         {
             if (icon_baseBitmap == null)
                 return;
 
             Icon newIcon;
 
-            bool hasInbound = controller.traffic.Last.inboundIncreasement > 0;
-            bool hasOutbound = controller.traffic.Last.outboundIncreasement > 0;
+            bool hasInbound = traffic.Last.inboundIncreasement > 0;
+            bool hasOutbound = traffic.Last.outboundIncreasement > 0;
 
             if (hasInbound && hasOutbound)
                 newIcon = icon_both;

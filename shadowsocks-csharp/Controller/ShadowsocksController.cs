@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -24,7 +25,6 @@ namespace Shadowsocks.Controller
         // interacts with low level logic
 
         private Thread _ramThread;
-        private Thread _trafficThread;
 
         private Listener _listener;
         private PACServer _pacServer;
@@ -34,11 +34,7 @@ namespace Shadowsocks.Controller
         public AvailabilityStatistics availabilityStatistics = AvailabilityStatistics.Instance;
         public StatisticsStrategyConfiguration StatisticsConfiguration { get; private set; }
 
-        private long _inboundCounter = 0;
-        private long _outboundCounter = 0;
-        public long InboundCounter => Interlocked.Read(ref _inboundCounter);
-        public long OutboundCounter => Interlocked.Read(ref _outboundCounter);
-        public QueueLast<TrafficPerSecond> traffic;
+        private readonly ConcurrentDictionary<string, IStatisticsService> _statisticsServices = new ConcurrentDictionary<string, IStatisticsService>();
 
         private bool stopped = false;
 
@@ -49,30 +45,11 @@ namespace Shadowsocks.Controller
             public string Path;
         }
 
-        public class QueueLast<T> : Queue<T>
-        {
-            public T Last { get; private set; }
-            public new void Enqueue(T item)
-            {
-                Last = item;
-                base.Enqueue(item);
-            }
-        }
-
-        public class TrafficPerSecond
-        {
-            public long inboundCounter;
-            public long outboundCounter;
-            public long inboundIncreasement;
-            public long outboundIncreasement;
-        }
-
         public event EventHandler ConfigChanged;
         public event EventHandler EnableStatusChanged;
         public event EventHandler EnableGlobalChanged;
         public event EventHandler ShareOverLANStatusChanged;
         public event EventHandler VerboseLoggingStatusChanged;
-        public event EventHandler TrafficChanged;
 
         // when user clicked Edit PAC, and PAC file has already created
         public event EventHandler<PathEventArgs> PACFileReadyToOpen;
@@ -90,7 +67,7 @@ namespace Shadowsocks.Controller
             StatisticsConfiguration = StatisticsStrategyConfiguration.Load();
             StrategyManager.InitInstance(this);
             StartReleasingMemory();
-            StartTrafficStatistics(61);
+            TrafficStatisticsService.StartTrafficStatistics(this, 61);
         }
 
         public void Start()
@@ -398,29 +375,47 @@ namespace Shadowsocks.Controller
             }
         }
 
+        public void RegisterStatisticsService(IStatisticsService service)
+        {
+            if (!_statisticsServices.TryAdd(service.ID, service))
+            {
+                throw new InvalidOperationException($"Can't register statistics service with a same id: {service.ID}");
+            }
+        }
+
+        public void UnregisterStatisticsService(IStatisticsService service)
+        {
+            IStatisticsService oldService;
+            if (_statisticsServices.TryRemove(service.ID, out oldService))
+            {
+                if (oldService != service)
+                {
+                    Logging.Debug($"Attempt to unregister service {service.ID} using another instance.");
+                }
+            }
+        }
+
         public void UpdateLatency(Server server, TimeSpan latency)
         {
-            if (_config.availabilityStatistics)
+            foreach (var service in _statisticsServices.Values)
             {
-                availabilityStatistics.UpdateLatency(server, (int)latency.TotalMilliseconds);
+                service.UpdateLatency(server, latency);
             }
         }
 
         public void UpdateInboundCounter(Server server, long n)
         {
-            Interlocked.Add(ref _inboundCounter, n);
-            if (_config.availabilityStatistics)
+            foreach (var service in _statisticsServices.Values)
             {
-                availabilityStatistics.UpdateInboundCounter(server, n);
+                service.UpdateInboundCounter(server, n);
             }
         }
 
         public void UpdateOutboundCounter(Server server, long n)
         {
-            Interlocked.Add(ref _outboundCounter, n);
-            if (_config.availabilityStatistics)
+            foreach (var service in _statisticsServices.Values)
             {
-                availabilityStatistics.UpdateOutboundCounter(server, n);
+                service.UpdateOutboundCounter(server, n);
             }
         }
 
@@ -497,10 +492,7 @@ namespace Shadowsocks.Controller
                 ReportError(e);
             }
 
-            if (ConfigChanged != null)
-            {
-                ConfigChanged(this, new EventArgs());
-            }
+            ConfigChanged?.Invoke(this, new EventArgs());
 
             UpdateSystemProxy();
             Utils.ReleaseMemory(true);
@@ -611,44 +603,6 @@ namespace Shadowsocks.Controller
             {
                 Utils.ReleaseMemory(false);
                 Thread.Sleep(30 * 1000);
-            }
-        }
-
-        #endregion
-
-        #region Traffic Statistics
-
-        private void StartTrafficStatistics(int queueMaxSize)
-        {
-            traffic = new QueueLast<TrafficPerSecond>();
-            for (int i = 0; i < queueMaxSize; i++)
-            {
-                traffic.Enqueue(new TrafficPerSecond());
-            }
-            _trafficThread = new Thread(new ThreadStart(() => TrafficStatistics(queueMaxSize)));
-            _trafficThread.IsBackground = true;
-            _trafficThread.Start();
-        }
-
-        private void TrafficStatistics(int queueMaxSize)
-        {
-            while (true)
-            {
-                TrafficPerSecond previous = traffic.Last;
-                TrafficPerSecond current = new TrafficPerSecond();
-                
-                var inbound = current.inboundCounter = InboundCounter;
-                var outbound = current.outboundCounter = OutboundCounter;
-                current.inboundIncreasement = inbound - previous.inboundCounter;
-                current.outboundIncreasement = outbound - previous.outboundCounter;
-
-                traffic.Enqueue(current);
-                if (traffic.Count > queueMaxSize)
-                    traffic.Dequeue();
-
-                TrafficChanged?.Invoke(this, new EventArgs());
-
-                Thread.Sleep(1000);
             }
         }
 
