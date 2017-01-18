@@ -16,6 +16,8 @@ using System.Text;
 using System.Net.Sockets;
 using System.Collections;
 using System.Diagnostics;
+using Shadowsocks.Controller;
+
 //using System.Management;
 
 namespace OpenDNS
@@ -47,6 +49,10 @@ namespace OpenDNS
         {
             get { return _Response; }
         }
+
+        public IPEndPoint ProxyAddr { get; set; }
+        public string ProxyUser { get; set; }
+        public string ProxyPassword { get; set; }
 
         /// <summary>
         /// Default Constructor with QueryType: A 
@@ -150,18 +156,45 @@ namespace OpenDNS
             //opening the UDP socket at DNS server
             IPAddress serverAddress = IPAddress.Parse(ipAddress);
             EndPoint endPoint = new IPEndPoint(serverAddress, port);
-            Socket socket = new Socket(serverAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, timeout);
-            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveTimeout, timeout);
-            socket.SendTo(QueryPacket, endPoint);
-            data = new byte[512];
+            if (ProxyAddr != null)
+            {
+                Dns2Socks5 proxySocket = null;
+                try
+                {
+                    proxySocket = new Dns2Socks5(ProxyAddr, ProxyUser, ProxyPassword, timeout);
 
-            length = socket.ReceiveFrom(data, ref endPoint);
+                    proxySocket.SendTo(QueryPacket, endPoint);
+
+                    data = new byte[512];
+
+                    length = proxySocket.Receive(data);
+
+                    proxySocket.Shutdown(SocketShutdown.Both);
+                }
+                finally
+                {
+                    proxySocket?.Close();
+                }
+            }
+            else
+            {
+                using (Socket socket = new Socket(serverAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp))
+                {
+                    socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, timeout);
+                    socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveTimeout, timeout);
+                    socket.SendTo(QueryPacket, endPoint);
+                    data = new byte[512];
+
+                    length = socket.ReceiveFrom(data, ref endPoint);
+
+                    socket.Shutdown(SocketShutdown.Both);
+                }
+            }
+
+            Debug.WriteLine("" + length);
 
             //un pack the byte array & makes an array of resource record objects.
             ReadResponse();
-
-            socket.Shutdown(SocketShutdown.Both);
 
         }
 

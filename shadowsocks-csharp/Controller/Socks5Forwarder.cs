@@ -80,7 +80,7 @@ namespace Shadowsocks.Controller
                                 ipAddress = Utils.DnsBuffer.Get(host);
                                 if (ipAddress == null)
                                 {
-                                    ipAddress = Util.Utils.QueryDns(host, _config.dns_server);
+                                    ipAddress = Util.Utils.QueryDns(host, _config.dns_server, false, _config);
                                     if (ipAddress != null)
                                     {
                                         Utils.DnsBuffer.Set(host, ipAddress);
@@ -198,7 +198,7 @@ namespace Shadowsocks.Controller
                                 }
                                 if (ipAddress == null)
                                 {
-                                    ipAddress = Utils.QueryDns(_remote_host, _config.dns_server);
+                                    ipAddress = Utils.QueryDnsDirect(_remote_host, _config.dns_server);
                                 }
                                 if (ipAddress != null)
                                 {

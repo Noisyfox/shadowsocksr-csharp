@@ -270,7 +270,14 @@ namespace Shadowsocks.Util
             }
         }
 
-        public static IPAddress QueryDns(string host, string dns_servers, bool IPv6_first = false)
+        public static IPAddress QueryDns(string host, string dns_servers, bool IPv6_first, Configuration config)
+        {
+            return QueryDnsThroughProxy(host, dns_servers, IPv6_first,
+                new IPEndPoint(IPAddress.Loopback, config.localPort), config.authUser, config.authPass);
+        }
+
+        public static IPAddress QueryDnsThroughProxy(string host, string dns_servers, bool IPv6_first, IPEndPoint ssEndPoint,
+            string user, string password)
         {
             IPAddress ret_ipAddress = null;
             {
@@ -295,6 +302,9 @@ namespace Shadowsocks.Util
                     for (int query_i = 0; query_i < types.Length; ++query_i)
                     {
                         DnsQuery dns = new DnsQuery(host, types[query_i]);
+                        dns.ProxyAddr = ssEndPoint;
+                        dns.ProxyUser = user;
+                        dns.ProxyPassword = password;
                         dns.RecursionDesired = true;
                         foreach (string server in dns_server)
                         {
@@ -339,6 +349,11 @@ namespace Shadowsocks.Util
                 }
             }
             return ret_ipAddress;
+        }
+
+        public static IPAddress QueryDnsDirect(string host, string dns_servers, bool IPv6_first = false)
+        {
+            return QueryDnsThroughProxy(host, dns_servers, IPv6_first, null, null, null);
         }
 
         public static string GetExecutablePath()

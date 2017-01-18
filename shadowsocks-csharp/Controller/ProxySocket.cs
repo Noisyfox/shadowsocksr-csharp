@@ -77,12 +77,12 @@ namespace Shadowsocks.Controller
             }
         }
 
-        public void Shutdown(SocketShutdown how)
+        public virtual void Shutdown(SocketShutdown how)
         {
             _socket.Shutdown(how);
         }
 
-        public void Close()
+        public virtual void Close()
         {
             _socket.Close();
         }

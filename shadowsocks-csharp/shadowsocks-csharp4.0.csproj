@@ -68,6 +68,7 @@
     <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="3rd\opendns\Dns2Socks5.cs" />
     <Compile Include="3rd\opendns\DnsQuery.cs" />
     <Compile Include="3rd\opendns\DnsResponse.cs" />
     <Compile Include="3rd\opendns\Enum.cs" />

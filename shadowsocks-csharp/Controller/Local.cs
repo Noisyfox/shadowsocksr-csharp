@@ -859,7 +859,7 @@ namespace Shadowsocks.Controller
                 }
                 if (ipAddress == null)
                 {
-                    ipAddress = Utils.QueryDns(host, cfg.dns_servers);
+                    ipAddress = Utils.QueryDnsDirect(host, cfg.dns_servers);
                 }
                 if (ipAddress != null)
                 {
@@ -905,7 +905,7 @@ namespace Shadowsocks.Controller
                             {
                                 if (buf.isExpired(serverURI))
                                 {
-                                    ipAddress = Util.Utils.QueryDns(serverURI, cfg.dns_servers);
+                                    ipAddress = Util.Utils.QueryDnsDirect(serverURI, cfg.dns_servers);
                                     if (ipAddress != null)
                                     {
                                         buf.UpdateDns(serverURI, ipAddress);
